@@ -1,0 +1,145 @@
+{% extends "network/layout.html" %}
+
+{% block body %}
+    {% if user.is_authenticated %}
+      <h3>New Post</h3>
+      <form id="new-post-form" method="post">
+          {% csrf_token %}
+          <textarea name="content" placeholder="What's on your mind?" rows="3" cols="60"></textarea><br>
+          <input type="submit" value="Post">
+      </form>
+      <hr>
+    {% endif %}
+
+    <h3>All Posts</h3>
+    {% for post in posts %}
+    <div class="post" data-post-id="{{ post.id }}" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;">
+        <strong><a href="{% url 'profile' username=post.user.username %}">{{ post.user.username }}</a></strong><br>
+        <div class="post-content">
+            <span class="content">{{ post.content }}</span>
+        </div>
+        <small>{{ post.timestamp }}</small><br>
+      
+        <span class="like-count">{{ post.likes.count }}</span> ❤️
+        {% if user.is_authenticated and user != post.user %}
+          <button class="btn btn-sm btn-outline-danger like-button mt-1">
+            {% if post.id in liked_posts %}
+              Unlike
+            {% else %}
+              Like
+            {% endif %}
+          </button>
+        {% endif %}
+      
+        {% if user == post.user %}
+          <button class="btn btn-sm btn-outline-primary edit-button mt-1">Edit</button>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <div class="pagination">
+        <nav aria-label="Page navigation">
+          <ul class="pagination justify-content-center">
+            {% if posts.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ posts.previous_page_number }}">Previous</a>
+                </li>
+            {% endif %}
+
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ posts.number }} of {{ posts.paginator.num_pages }}</span>
+            </li>
+
+            {% if posts.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ posts.next_page_number }}">Next</a>
+                </li>
+            {% endif %}
+          </ul>
+        </nav>
+    </div>
+
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Like
+            document.querySelectorAll('.like-button').forEach(button => {
+                button.onclick = () => {
+                    const postDiv = button.closest('.post');
+                    const postId = postDiv.dataset.postId;
+                    const likeCountSpan = postDiv.querySelector('.like-count');
+
+                    fetch(`/like/${postId}`, {
+                        method: "PUT",
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        likeCountSpan.innerText = data.likes_count;
+                        button.innerText = data.liked ? "Unlike" : "Like";
+                    });
+                };
+            });
+
+            // Edit
+            document.querySelectorAll('.edit-button').forEach(button => {
+                button.onclick = () => {
+                    const postDiv = button.closest('.post');
+                    const postId = postDiv.dataset.postId;
+                    const contentSpan = postDiv.querySelector('.content');
+
+                    const textarea = document.createElement('textarea');
+                    textarea.value = contentSpan.innerText;
+                    textarea.className = "form-control";
+                    textarea.rows = 3;
+
+                    const saveButton = document.createElement('button');
+                    saveButton.innerText = "Save";
+                    saveButton.className = "btn btn-success btn-sm mt-1";
+
+                    contentSpan.replaceWith(textarea);
+                    button.replaceWith(saveButton);
+
+                    saveButton.onclick = () => {
+                        fetch(`/edit/${postId}`, {
+                            method: "PUT",
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken'),
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                content: textarea.value
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            const newContent = document.createElement('span');
+                            newContent.className = "content";
+                            newContent.innerText = textarea.value;
+
+                            textarea.replaceWith(newContent);
+                            saveButton.replaceWith(button);
+                        });
+                    };
+                };
+            });
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    </script>
+{% endblock %}
